@@ -4,6 +4,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 
 import numpy as np
 
@@ -14,11 +15,6 @@ class Model(object):
         self.test_df = test_df.copy()
 
         self.target_class = target_class
-
-class LogRegression(Model):
-
-    def __init__(self, train_df, test_df, target_class):
-        super(LogRegression, self).__init__(train_df, test_df, target_class)
 
     def pre_processing(self):
 
@@ -90,6 +86,12 @@ class LogRegression(Model):
             self.train_df[col].fillna('-999', inplace=True)
             self.test_df[col].fillna('-999', inplace=True)
 
+class LogRegression(Model):
+
+    def __init__(self, train_df, test_df, target_class):
+        super(LogRegression, self).__init__(train_df, test_df, target_class)
+
+
     def train_model(self, features, train_label):
         X = self.train_df[features]
         y = self.train_df[train_label]
@@ -108,6 +110,56 @@ class LogRegression(Model):
         log_reg_predictions = np.array(log_reg_predictions)
 
         return log_reg_predictions
+
+class RandomForestModel(Model):
+
+    def __init__(self, train_df, test_df, target_class):
+        super(RandomForestModel, self).__init__(train_df, test_df, target_class)
+
+
+    def train_model(self, features, train_label):
+        X = self.train_df[features]
+        y = self.train_df[train_label]
+
+        est = RandomForestClassifier(n_estimators=200, criterion='entropy', n_jobs=-1)
+        est.fit(X, y)
+
+        return est
+
+    def predict(self, est, features):
+        Xtest = self.test_df[features]
+
+        log_reg_predictions = est.predict(Xtest)
+        log_reg_predictions = map(inverse_mapping, log_reg_predictions)
+
+        log_reg_predictions = np.array(log_reg_predictions)
+
+        return log_reg_predictions
+
+class GradientBoostingModel(Model):
+    def __init__(self, train_df, test_df, target_class):
+        super(GradientBoostingModel, self).__init__(train_df, test_df, target_class)
+
+
+    def train_model(self, features, train_label):
+        X = self.train_df[features]
+        y = self.train_df[train_label]
+
+        est = GradientBoostingClassifier(n_estimators=500, learning_rate=0.01, subsample=0.8, min_samples_leaf=10)
+        est.fit(X, y)
+
+        return est
+
+    def predict(self, est, features):
+        Xtest = self.test_df[features]
+
+        log_reg_predictions = est.predict(Xtest)
+        log_reg_predictions = map(inverse_mapping, log_reg_predictions)
+
+        log_reg_predictions = np.array(log_reg_predictions)
+
+        return log_reg_predictions
+
 
 class BaseModel(Model):
     def __init__(self, train_df, test_df, target_class):
