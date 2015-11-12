@@ -1,22 +1,39 @@
 from helper import inverse_mapping
 
+
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.feature_selection import VarianceThreshold
+
 
 import numpy as np
 
 class Model(object):
 
     def __init__(self, train_df, test_df, target_class):
+        """
+        Creates copy of both the training dataset
+        and test dataset and stores column name of the
+        target class.
+
+        Input: train_df, test_df, target_class
+        """
+
         self.train_df = train_df.copy()
         self.test_df = test_df.copy()
 
         self.target_class = target_class
 
     def pre_processing(self):
+        """
+        Encodes the target variable from {Y, N} -> {1, 0}
+        and replaces missing values with the mean value for all quantitative
+        variables and with -999 for other categorical variables and encodes
+        categorical variables.
+        """
 
         self.train_df['Loan_Status']  = (self.train_df.Loan_Status=='Y') * 1
 
@@ -35,9 +52,13 @@ class Model(object):
         self.fill_nan(all_object_cols)
         self.encode_labels(all_object_cols)
 
-    def get_mask(self):
-        loantrain, loantest = train_test_split(xrange(self.train_df.shape[0]), train_size=0.7)
-        loanmask = np.ones(self.train_df.shape[0], dtype='int')
+    def get_mask(self, dataset, train_size=0.7):
+        """
+        Returns the boolean mask which can be used to split the dataset
+        """
+
+        loantrain, loantest = train_test_split(xrange(dataset.shape[0]), train_size=train_size)
+        loanmask = np.ones(dataset.shape[0], dtype='int')
         loanmask[loantrain] = 1
         loanmask[loantest] = 0
         loanmask = (loanmask==1)
@@ -45,27 +66,68 @@ class Model(object):
         return loanmask
 
     def split_dataset(self):
-        loanmask = self.get_mask()
-        self.X_train = self.train_df[loanmask]
+        """
+        Splits the training dataset into X_train and X_val
+        """
+
+        loanmask = self.get_mask(self.train_df)
+        features = self.train_df.columns.drop('Loan_Status')
+
+        self.X_train = self.train_df[features][loanmask]
         self.y_train = self.train_df.Loan_Status[loanmask]
 
-        self.X_val = self.train_df[~loanmask]
+        self.X_val = self.train_df[features][~loanmask]
         self.y_val = self.train_df.Loan_Status[~loanmask]
 
-    def get_cross_validation_scores(self, est, features, target_label):
-        self.split_dataset()
+    def feature_selection(self):
 
-        skf = StratifiedKFold(self.y_train, 5)
-        X = self.X_train[features]
-        y = self.y_train
+        loanmask = self.get_mask(self.X_train)
+
+        self.X_grid_search = self.X_train[loanmask]
+        self.y_grid_search = self.y_train[loanmask]
+
+        self.X_feature_selection = self.X_train[~loanmask]
+        self.y_feature_selection = self.y_train[~loanmask]
+
+        sel = VarianceThreshold(threshold=(.8 * (1 - .8)))
+        sel.fit(self.X_feature_selection)
+
+        self.sel = sel
+
+
+    def get_cross_validation_scores(self, est):
+        sel = self.sel
+        skf = StratifiedKFold(self.y_grid_search, 5)
+
+        X = sel.transform(self.X_grid_search)
+        y = self.y_grid_search
 
         scores = cross_val_score(est, X, y, cv=skf)
 
         return scores
 
-    def test(self, est, features):
-        y_pred = est.predict(self.X_val[features])
+    def fit_model(self, est):
+        sel = self.sel
+
+        X = sel.transform(self.X_grid_search)
+        y = self.y_grid_search
+
+        return est.fit(X, y)
+
+    def test(self, est):
+        sel = self.sel
+
+        y_pred = est.predict(sel.transform(self.X_val))
         return accuracy_score(self.y_val, y_pred)
+
+    def get_mispredicted_index(self, ytrue, ypred):
+        return ytrue != ypred
+
+    def analyze_mistakes(self, est):
+        sel = self.sel
+
+        y_pred = est.predict(sel.transform(self.X_val))
+        return self.get_mispredicted_index(self.y_val, y_pred)
 
     def get_all_object_cols(self):
         return [col for col in self.train_df.columns.drop('Loan_Status') if self.train_df[col].dtype == 'O']
@@ -92,8 +154,13 @@ class LogRegression(Model):
         super(LogRegression, self).__init__(train_df, test_df, target_class)
 
 
-    def train_model(self, features, train_label):
-        X = self.train_df[features]
+    def train_model(self, train_label):
+        sel = self.sel
+        features = self.train_df.columns.drop('Loan_Status')
+
+        train_df = self.train_df[features]
+
+        X = sel.transform(train_df)
         y = self.train_df[train_label]
 
         est = LogisticRegression(C=1.)
@@ -117,8 +184,13 @@ class RandomForestModel(Model):
         super(RandomForestModel, self).__init__(train_df, test_df, target_class)
 
 
-    def train_model(self, features, train_label):
-        X = self.train_df[features]
+    def train_model(self, train_label):
+        sel = self.sel
+        features = self.train_df.columns.drop('Loan_Status')
+
+        train_df = self.train_df[features]
+
+        X = sel.transform(train_df)
         y = self.train_df[train_label]
 
         est = RandomForestClassifier(n_estimators=200, criterion='entropy', n_jobs=-1)
@@ -141,24 +213,29 @@ class GradientBoostingModel(Model):
         super(GradientBoostingModel, self).__init__(train_df, test_df, target_class)
 
 
-    def train_model(self, features, train_label):
-        X = self.train_df[features]
+    def train_model(self, est, train_label):
+        sel = self.sel
+        features = self.train_df.columns.drop(train_label)
+
+        train_df = self.train_df[features]
+
+        X = sel.transform(train_df)
         y = self.train_df[train_label]
 
-        est = GradientBoostingClassifier(n_estimators=500, learning_rate=0.01, subsample=0.8, min_samples_leaf=10)
         est.fit(X, y)
 
         return est
 
-    def predict(self, est, features):
-        Xtest = self.test_df[features]
+    def predict(self, est):
+        sel = self.sel
+        Xtest = sel.transform(self.test_df)
 
-        log_reg_predictions = est.predict(Xtest)
-        log_reg_predictions = map(inverse_mapping, log_reg_predictions)
+        predictions = est.predict(Xtest)
+        predictions = map(inverse_mapping, predictions)
 
-        log_reg_predictions = np.array(log_reg_predictions)
+        predictions = np.array(predictions)
 
-        return log_reg_predictions
+        return predictions
 
 
 class BaseModel(Model):
