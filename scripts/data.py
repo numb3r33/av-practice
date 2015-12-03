@@ -1,48 +1,64 @@
-class Data(object):
+import pandas as pd
+import numpy as np
 
-    def __init__(self, train_df, test_df, target_label):
-        self.train_df = train_df.copy()
-        self.test_df = test_df.copy()
-        self.target_label = target_label
+from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction import DictVectorizer
 
-    def pre_processing(self):
-        """
-        Replaces missing values with the mean value for all quantitative
-        variables and with -999 for other categorical variables and encodes
-        categorical variables.
-        """
+"""
+Prepare different datasets
 
-        self.train_df['Loan_Status']  = (self.train_df.Loan_Status=='Y') * 1
+1. Label Encoding
+2. One Hot Encoding
 
-        self.train_df['LoanAmount'].fillna(self.train_df['LoanAmount'].mean(), inplace=True)
-        self.test_df['LoanAmount'].fillna(self.test_df['LoanAmount'].mean(), inplace=True)
-
-        self.train_df['Loan_Amount_Term'].fillna(self.train_df['Loan_Amount_Term'].mean(), inplace=True)
-        self.test_df['Loan_Amount_Term'].fillna(self.test_df['Loan_Amount_Term'].mean(), inplace=True)
-
-        self.train_df['Gender'].fillna('-999', inplace=True)
-        self.test_df['Gender'].fillna('-999', inplace=True)
-
-        self.train_df['Married'].fillna('-999', inplace=True)
-        self.test_df['Married'].fillna('-999', inplace=True)
-
-        self.train_df['Dependents'].fillna('-999', inplace=True)
-        self.test_df['Dependents'].fillna('-999', inplace=True)
-
-        self.train_df['Self_Employed'].fillna('-999', inplace=True)
-        self.test_df['Self_Employed'].fillna('-999', inplace=True)
-
-        self.train_df['Credit_History'].fillna(-999, inplace=True)
-        self.test_df['Credit_History'].fillna(-999, inplace=True)
+"""
 
 
-    def get_train_X(self):
-        features = self.train_df.columns.drop(self.target_label)
+def get_label_encoded_data(train_df, test_df, obj_cols):
+    train_df_cpy = train_df.copy()
+    test_df_cpy = test_df.copy()
 
-        return self.train_df[features]
+    for col in obj_cols:
+        lbl = LabelEncoder()
+        data = pd.concat([train_df_cpy[col], test_df_cpy[col]])
 
-    def get_train_Y(self):
-        return self.train_df[self.target_label]
+        lbl.fit(data)
+        train_df_cpy[col] = lbl.transform(train_df_cpy[col])
+        test_df_cpy[col] = lbl.transform(test_df_cpy[col])
 
-    def get_test_X(self):
-        return self.test_df
+    return train_df_cpy, test_df_cpy
+
+
+
+def get_dummy_variable_data(train_df, test_df, non_obj_cols, obj_cols):
+    train_df_cpy = train_df.copy()
+    test_df_cpy = test_df.copy()
+
+    non_obj_train_df = train_df_cpy[non_obj_cols]
+    non_obj_test_df = test_df_cpy[non_obj_cols]
+
+    obj_train_df = train_df_cpy[obj_cols]
+    obj_test_df = test_df_cpy[obj_cols]
+
+    # fill missing values
+    obj_train_df = obj_train_df.fillna('NA')
+    obj_test_df = obj_test_df.fillna('NA')
+
+    #transform the categorical to dict
+    dict_train_data = obj_train_df.T.to_dict().values()
+    dict_test_data = obj_test_df.T.to_dict().values()
+
+    vectorizer = DictVectorizer(sparse=False)
+    vec_train_data = vectorizer.fit_transform(dict_train_data)
+    vec_test_data = vectorizer.transform(dict_test_data)
+
+    #merge numerical and categorical sets
+    x_train = np.column_stack((non_obj_train_df, vec_train_data))
+    x_test = np.column_stack((non_obj_test_df, vec_test_data))
+
+    feature_names = list(non_obj_cols.values) + vectorizer.get_feature_names()
+    
+    x_train = pd.DataFrame(x_train, columns=feature_names)
+    x_test = pd.DataFrame(x_test, columns=feature_names)
+
+    return x_train, x_test
+
