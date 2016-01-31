@@ -58,7 +58,8 @@ class FeatureTransformer(BaseEstimator):
 		Number_Weeks_Used = X.Number_Weeks_Used
 		Number_Weeks_Quit = X.Number_Weeks_Quit
 
-		Currently_Using_Pesticides = (X.Pesticide_Use_Category==3) * 1.
+		Currently_Using_Pesticides = (X.Pesticide_Use_Category!=3) * 1.
+		Season = (X.Season==1) * 1.
 		Soil_Type = X.Soil_Type
 		Crop_Type = X.Crop_Type
 
@@ -84,11 +85,12 @@ class FeatureTransformer(BaseEstimator):
 			return int(estimated_insect_group_per_season.ix[season] < row.Estimated_Insects_Count)
 
 
-		insect_value_counts = X.Estimated_Insects_Count.value_counts()
-		num_doses_week_value_counts = X.Number_Doses_Week.value_counts()
-
-		Insect_Count = X.Estimated_Insects_Count.map(lambda x: insect_value_counts.ix[x])
+		weeks_quit_count = X.Number_Weeks_Quit.value_counts()
+		
+		Weeks_Quit_Count = X.Number_Weeks_Quit.map(lambda x: weeks_quit_count.ix[x])
 		Pesticide_Not_Used_Despite_High_Insect_Count = ((X.Estimated_Insects_Count > X.Estimated_Insects_Count.mean()) & (X.Pesticide_Use_Category==1)) * 1.
+		
+		Number_Weeks_Quit_Flag = (X.Number_Weeks_Quit<=35) * 1.
 		# Avg_insect_count_per_dose = X.apply(avg_insect_count_per_dose, axis=1)
 		# Avg_insect_count_per_pesticide_strategy = X.apply(avg_insect_count_per_pesticide_strategy, axis=1)
 		# Avg_insect_count_per_crop_type = X.apply(avg_insect_count_per_crop_type, axis=1)
@@ -98,19 +100,19 @@ class FeatureTransformer(BaseEstimator):
 
 		# Zero_Weeks_Used = (X.Number_Weeks_Used==0) * 1.
 		# Zero_Doses_Week = (X.Number_Doses_Week==0) * 1.
-		# Soil_Type = X.Soil_Type
-		# Crop_Type = X.Crop_Type
-
+		
 		return np.array([
 						 Number_Doses_Week,
 			             Estimated_Insects_Count,
 			             Number_Weeks_Used,
 			             Number_Weeks_Quit,
 			             Currently_Using_Pesticides,
+			             Season,
 			             Soil_Type,
 			             Crop_Type,
-			             Insect_Count,
+			             Weeks_Quit_Count,
 			             Pesticide_Not_Used_Despite_High_Insect_Count,
+			             Number_Weeks_Quit_Flag,
 			             # Avg_insect_count_per_dose,
 			             # Avg_insect_count_per_pesticide_strategy,
 			             # Avg_insect_count_per_crop_type,
