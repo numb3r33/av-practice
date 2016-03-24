@@ -1,3 +1,5 @@
 data/
 submissions/
 scripts/*.pyc
+code/
+.DS_Store
