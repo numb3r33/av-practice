@@ -75,7 +75,7 @@ class Dataset(object):
         self.X = pd.DataFrame(self.X)
         self.X_test = pd.DataFrame(self.X_test)
         
-        self.X.loc[:, 'Loan_Status'] = self.y
+        self.X.loc[:, 21] = pd.Series(self.y.values)
         
         self.X.to_csv('./data/synthesized/' + self.train_filename, index=False)
         self.X_test.to_csv('./data/synthesized/' + self.test_filename, index=False)
